@@ -3,7 +3,7 @@ import geopandas as gpd
 import pandas as pd
 from shapely.geometry import Point
 
-st.title("Company-Geojson Matcher")
+st.title("Company-Feature Matcher")
 
 # Upload GeoJSON file
 geojson_file = st.file_uploader("Upload a GeoJSON file", type="geojson")
@@ -39,7 +39,7 @@ def get_features(geojson_file):
 def filter_companies_in_features(geojson_file, csv_file):
     neighborhoods, name_exists = get_features(geojson_file)
     if neighborhoods is None:
-        return None, 0, 0
+        return None, 0, 0, None
     
     # Load company data
     companies_df = pd.read_csv(csv_file)
@@ -50,13 +50,10 @@ def filter_companies_in_features(geojson_file, csv_file):
     # Ensure the required columns are present
     if 'LATITUDE' not in companies_df.columns or 'LONGITUDE' not in companies_df.columns:
         st.error("CSV file must contain 'LATITUDE' and 'LONGITUDE' columns.")
-        return None, 0, 0
+        return None, 0, 0, None
     
     # Identify the funding column
     funding_column = next((col for col in companies_df.columns if col.startswith('TOTAL FUNDING')), None)
-    if not funding_column:
-        st.error("CSV file must contain a column starting with 'TOTAL FUNDING'.")
-        return None, 0, 0
     
     # Create geometry points from latitude and longitude
     company_points = [Point(xy) for xy in zip(companies_df['LONGITUDE'], companies_df['LATITUDE'])]
@@ -78,19 +75,26 @@ def calculate_funding(geojson_file, csv_file):
     if filtered_companies is None:
         return None
     
-    # Calculate total funding for the entire area
-    total_funding_entire_area = filtered_companies[funding_column].sum()
-    
     # Calculate total funding and company count per feature
-    funding_per_feature = filtered_companies.groupby('name').agg(
-        company_count=('name', 'size'),
-        funding_amount=(funding_column, 'sum')
-    ).reset_index()
-    funding_per_feature.columns = ['Feature', 'Company Count', 'Funding Amount']
-    
-    # Add the entire area total as the first row
-    entire_area_row = pd.DataFrame([['Entire Area', output_count, total_funding_entire_area]], columns=['Feature', 'Company Count', 'Funding Amount'])
-    result = pd.concat([entire_area_row, funding_per_feature], ignore_index=True)
+    if funding_column:
+        total_funding_entire_area = filtered_companies[funding_column].sum()
+        funding_per_feature = filtered_companies.groupby('name').agg(
+            company_count=('name', 'size'),
+            funding_amount=(funding_column, 'sum')
+        ).reset_index()
+        funding_per_feature.columns = ['Feature', 'Company Count', 'Funding Amount']
+        
+        # Add the entire area total as the first row
+        entire_area_row = pd.DataFrame([['Entire Area', output_count, total_funding_entire_area]], columns=['Feature', 'Company Count', 'Funding Amount'])
+        result = pd.concat([entire_area_row, funding_per_feature], ignore_index=True)
+    else:
+        # Only calculate company count per feature
+        company_count_per_feature = filtered_companies['name'].value_counts().reset_index()
+        company_count_per_feature.columns = ['Feature', 'Company Count']
+        
+        # Add the entire area total as the first row
+        entire_area_row = pd.DataFrame([['Entire Area', output_count]], columns=['Feature', 'Company Count'])
+        result = pd.concat([entire_area_row, company_count_per_feature], ignore_index=True)
     
     return result
 
