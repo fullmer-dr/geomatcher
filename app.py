@@ -41,8 +41,16 @@ def filter_companies_in_features(geojson_file, csv_file):
     if neighborhoods is None:
         return None, 0, 0, None
     
-    # Load company data
-    companies_df = pd.read_csv(csv_file)
+    # Read lines until a non-empty line is found to determine the delimiter
+    first_line = ''
+    while not first_line.strip():
+        first_line = csv_file.readline().decode('utf-8')
+    
+    csv_file.seek(0)  # Reset file pointer to the beginning
+    delimiter = ';' if ';' in first_line else ','
+    
+    # Load company data with the determined delimiter, skipping initial empty lines
+    companies_df = pd.read_csv(csv_file, sep=delimiter, skip_blank_lines=True)
     
     # Drop completely empty rows
     companies_df.dropna(how='all', inplace=True)
