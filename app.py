@@ -12,6 +12,13 @@ geojson_file = st.file_uploader("Upload a GeoJSON file", type="geojson")
 csv_file = st.file_uploader("Upload a CSV file", type="csv")
 
 def get_features(geojson_file):
+    # Read lines until a non-empty line is found
+    first_line = ''
+    while not first_line.strip():
+        first_line = geojson_file.readline().decode('utf-8')
+    
+    geojson_file.seek(0)  # Reset file pointer to the beginning
+    
     # Load neighborhood data
     neighborhoods = gpd.read_file(geojson_file)
     
@@ -41,9 +48,9 @@ def filter_companies_in_features(geojson_file, csv_file):
     if neighborhoods is None:
         return None, 0, 0, None
     
-    # Read lines until a non-empty line is found to determine the delimiter
+    # Read lines until a non-empty data row is found to determine the delimiter
     first_line = ''
-    while not first_line.strip():
+    while not first_line.strip() or all(field.strip() == '' for field in first_line.split(',')):
         first_line = csv_file.readline().decode('utf-8')
     
     csv_file.seek(0)  # Reset file pointer to the beginning
