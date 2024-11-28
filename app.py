@@ -11,7 +11,10 @@ geojson_file = st.file_uploader("Upload a GeoJSON file", type="geojson")
 # Upload CSV file
 csv_file = st.file_uploader("Upload a CSV file", type="csv")
 
-def get_features(geojson_file):
+# Add a text input for the user to specify the name field
+name_field_input = st.text_input("Specify the name field in GeoJSON (optional)", "")
+
+def get_features(geojson_file, name_field_input):
     # Read lines until a non-empty line is found
     first_line = ''
     while not first_line.strip():
@@ -22,10 +25,14 @@ def get_features(geojson_file):
     # Load neighborhood data
     neighborhoods = gpd.read_file(geojson_file)
     
-    # Attempt to extract 'name' from properties
-    if 'name' not in neighborhoods.columns:
-        if 'properties' in neighborhoods.columns:
-            neighborhoods['name'] = neighborhoods['properties'].apply(lambda x: x.get('hood', None))
+    # Use the user-specified name field if provided
+    if name_field_input and name_field_input in neighborhoods.columns:
+        neighborhoods['name'] = neighborhoods[name_field_input]
+    else:
+        # Attempt to extract 'name' from properties
+        if 'name' not in neighborhoods.columns:
+            if 'properties' in neighborhoods.columns:
+                neighborhoods['name'] = neighborhoods['properties'].apply(lambda x: x.get('hood', None))
     
     # Check if 'name' column exists in features
     name_exists = 'name' in neighborhoods.columns and neighborhoods['name'].notnull().any()
@@ -35,7 +42,7 @@ def get_features(geojson_file):
         fallback_column = next((col for col in possible_fallbacks if col in neighborhoods.columns), None)
         
         if fallback_column:
-            st.warning(f"'name' column not found in GeoJSON. Using '{fallback_column}' as a fallback.")
+            st.warning(f"'name' column not found in GeoJSON. Using '{fallback_column}' as a fallback. You can specify the correct field in the textbox (see instructions)")
             neighborhoods['name'] = neighborhoods[fallback_column].astype(str)
         else:
             st.info("No suitable identifier column found in GeoJSON for counting. Filtering will still work.")
@@ -44,7 +51,7 @@ def get_features(geojson_file):
     return neighborhoods[['name', 'geometry']], name_exists
 
 def filter_companies_in_features(geojson_file, csv_file):
-    neighborhoods, name_exists = get_features(geojson_file)
+    neighborhoods, name_exists = get_features(geojson_file, name_field_input)
     if neighborhoods is None:
         return None, 0, 0, None
     
@@ -114,7 +121,7 @@ def calculate_funding(geojson_file, csv_file):
     return result
 
 if geojson_file and csv_file:
-    neighborhoods, name_exists = get_features(geojson_file)
+    neighborhoods, name_exists = get_features(geojson_file, name_field_input)
     
     # Always show the filter button
     if neighborhoods is not None and st.button("Filter Companies within GeoJSON Area"):
@@ -143,8 +150,8 @@ st.markdown("""
 
 This application helps you match companies to geographical features using GeoJSON and CSV files. 
 
-- **GeoJSON File**: Defines geographical areas (e.g., cities, neighborhoods etc.).
-- **CSV File**: A Dealroom export in csv format that contains latitude and longitude.
+- **GeoJSON File**: Defines geographical areas (e.g., cities, neighborhoods etc.). If you get the error "name column not found", please take a look at your geojson and find the field where the sub-area name is saved (e.g. neighbourhood etc.).
+- **CSV File**: A Dealroom export in csv format that contains latitude and longitude. Please use normal export from dealroom. Empty rows at the top will return errors.
 - **Functionality**:
   - **Filter Companies**: Identify companies located within specified geographical areas (features). This requires at least: a geojson, a dealroom export as csv that contains company name, latitude, and longitude.
   - **Count Companies and Calculate Funding**: Count the number of companies per area (feature) and calculate their total funding. This requires at least: a geojson (with features for subareas that have a property name), a dealroom export as csv that contains company name, latitude, longitude, and total funding amount. 
